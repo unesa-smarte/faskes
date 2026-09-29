@@ -1,2 +1,2 @@
 # faskes
-Fasilitas pencarian faskes terdekat berbasisIS
+Fasilitas pencarian faskes terdekat berbasis GIS
