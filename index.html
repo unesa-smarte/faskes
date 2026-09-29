@@ -163,7 +163,7 @@
             map.setView([lat, lon], 13);
             
             userMarker = L.marker([lat, lon], { draggable: true }).addTo(map)
-                .bindPopup(`<b>${title}</b><br>💡 <i>Geser pin ini jika ingin mengubah posisi awal.</i>`)
+                .bindPopup(`<b>${title}</b><br>💡 <i>Geser pin ini jika ingin mengubah posisi anda.</i>`)
                 .openPopup();
 
             userMarker.on('dragend', function (e) {
