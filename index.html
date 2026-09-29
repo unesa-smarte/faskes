@@ -58,7 +58,7 @@
             margin-top: 6px; 
         }
         .badge-rawat { background: #28a745; } /* Hijau untuk Rawat Inap */
-        .badge-non { background: #ffc107; color: #333; } /* Kuning untuk Non Rawat Inap */
+        .badge-non { background: #fd7e14; color: white; } /* Oranye untuk Non Rawat Inap */
         .jarak-teks { font-size: 12px; color: #6c757d; float: right; margin-top: 6px; font-weight: bold; }
         
         /* Responsif untuk Layar Kecil / HP */
@@ -74,7 +74,7 @@
     <!-- Sidebar Kiri untuk Informasi -->
     <div id="sidebar">
         <h2>🏥 Puskesmas Terdekat</h2>
-        <div class="info-sub">Menampilkan maksimal 5 puskesmas terdekat dalam radius 10 km dari posisi Anda. (Klik kartu untuk melihat rute).</div>
+        <div class="info-sub">Maksimal 5 puskesmas (Radius 10 km). Klik kartu atau marker untuk melihat rute <b>Kendaraan Roda 2 (Motor)</b>.</div>
         <div id="daftar-puskesmas">
             <p style="color: #888; font-style: italic;">Sedang mendeteksi lokasi dan memuat data...</p>
         </div>
@@ -100,6 +100,30 @@
         let userMarker = null;
         let routingControl = null;
         let markerPuskesmasLayer = L.layerGroup().addTo(map);
+
+        // Membuat Icon Marker Kustom berdasarkan Warna (Rawat Inap = Hijau, Non Rawat Inap = Oranye)
+        function buatIconPuskesmas(warna) {
+            return L.divIcon({
+                className: 'custom-pin',
+                html: `<div style="
+                    background-color: ${warna}; 
+                    width: 24px; 
+                    height: 24px; 
+                    border-radius: 50%; 
+                    border: 2px solid white; 
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 10px;
+                    font-weight: bold;
+                ">🏥</div>`,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12],
+                popupAnchor: [0, -12]
+            });
+        }
 
         // 2. Fungsi Haversine untuk menghitung jarak (dalam kilometer)
         function hitungJarak(lat1, lon1, lat2, lon2) {
@@ -142,7 +166,6 @@
                     buatTitikPengguna(lat, lon, "Posisi Anda (Berdasarkan IP Address)");
                 })
                 .catch(() => {
-                    // Fallback terakhir jika IP gagal (Titik tengah Surabaya)
                     alert("Gagal mendeteksi lokasi otomatis. Menggunakan titik default Surabaya.");
                     buatTitikPengguna(-7.2575, 112.7521, "Posisi Default (Surabaya)");
                 });
@@ -151,24 +174,20 @@
         function buatTitikPengguna(lat, lon, title) {
             map.setView([lat, lon], 13);
             
-            // Buat marker pengguna yang bisa digeser (draggable)
             userMarker = L.marker([lat, lon], { draggable: true }).addTo(map)
-                .bindPopup(`<b>${title}</b><br>💡 <i>Tips: Anda bisa geser pin ini secara manual ke lokasi Anda.</i>`)
+                .bindPopup(`<b>${title}</b><br>💡 <i>Geser pin ini secara manual jika diperlukan.</i>`)
                 .openPopup();
 
-            // Event saat marker digeser manual oleh pengguna
             userMarker.on('dragend', function (e) {
                 let koordinatBaru = e.target.getLatLng();
                 prosesPuskesmasTerdekat(koordinatBaru.lat, koordinatBaru.lng);
             });
 
-            // Proses pencarian puskesmas terdekat berdasarkan koordinat awal
             prosesPuskesmasTerdekat(lat, lon);
         }
 
         // 4. Proses JSON dan Filter Radius 10 km (Maksimal 5)
         function prosesPuskesmasTerdekat(userLat, userLon) {
-            // Pastikan file "data_puskesmas_koordinat.json" berada di folder yang sama dengan file HTML ini
             fetch('data_puskesmas_koordinat.json')
                 .then(response => {
                     if (!response.ok) throw new Error("File JSON tidak ditemukan!");
@@ -179,9 +198,9 @@
                         let jarak = hitungJarak(userLat, userLon, p.Latitude, p.Longitude);
                         return { ...p, jarak: jarak };
                     })
-                    .filter(p => p.jarak <= 10)                  // Filter dalam radius 10 km
-                    .sort((a, b) => a.jarak - b.jarak)          // Urutkan dari yang terdekat
-                    .slice(0, 5);                               // Ambil maksimal 5 buah
+                    .filter(p => p.jarak <= 10)                  
+                    .sort((a, b) => a.jarak - b.jarak)          
+                    .slice(0, 5);                               
 
                     tampilkanKeSidebarDanPeta(userLat, userLon, hasil);
                 })
@@ -191,11 +210,11 @@
                 });
         }
 
-        // 5. Render ke Sidebar dan Peta
+        // 5. Render ke Sidebar dan Peta dengan Warna Berbeda
         function tampilkanKeSidebarDanPeta(userLat, userLon, listPuskesmas) {
             let containerSidebar = document.getElementById('daftar-puskesmas');
             containerSidebar.innerHTML = "";
-            markerPuskesmasLayer.clearLayers(); // Bersihkan marker lama
+            markerPuskesmasLayer.clearLayers(); 
 
             if (listPuskesmas.length === 0) {
                 containerSidebar.innerHTML = "<p style='color: #d9534f;'>Tidak ditemukan puskesmas dalam radius 10 km dari titik ini. Coba geser pin marker ke area lain.</p>";
@@ -207,12 +226,17 @@
                 let kemampuan = p["KEMAMPUAN PELAYANAN"] || "Tidak Diketahui";
                 let alamat = p.ALAMAT || "-";
                 
-                // Tentukan warna badge berdasarkan kemampuan pelayanan
-                let badgeClass = kemampuan.toLowerCase().includes("rawat inap") ? "badge-rawat" : "badge-non";
+                let isRawatInap = kemampuan.toLowerCase().includes("rawat inap");
+                let badgeClass = isRawatInap ? "badge-rawat" : "badge-non";
+                
+                // Atur warna marker: Hijau untuk Rawat Inap, Oranye untuk Non Rawat Inap
+                let warnaMarker = isRawatInap ? "#28a745" : "#fd7e14"; 
 
-                // A. Buat elemen HTML di Sidebar
+                // A. Render ke Sidebar
                 let itemDiv = document.createElement('div');
                 itemDiv.className = 'puskesmas-item';
+                // Sesuaikan garis border kiri sidebar mengikuti warna marker
+                itemDiv.style.borderLeftColor = warnaMarker; 
                 itemDiv.innerHTML = `
                     <b>${index + 1}. ${namaPuskesmas}</b><br>
                     <small style="color: #555;">${alamat}</small><br>
@@ -220,27 +244,28 @@
                     <span class="jarak-teks">${p.jarak.toFixed(2)} km</span>
                 `;
                 
-                // Jika item di sidebar diklik, tampilkan rute perjalanan
                 itemDiv.onclick = () => {
-                    buatRute(userLat, userLon, p.Latitude, p.Longitude);
+                    buatRuteRodaDua(userLat, userLon, p.Latitude, p.Longitude);
                 };
                 
                 containerSidebar.appendChild(itemDiv);
 
-                // B. Tambahkan Marker Puskesmas ke Peta
-                let markerPuskesmas = L.marker([p.Latitude, p.Longitude]).addTo(markerPuskesmasLayer)
-                    .bindPopup(`<b>${namaPuskesmas}</b><br>Kemampuan: ${kemampuan}<br>Jarak: ${p.jarak.toFixed(2)} km`);
+                // B. Render Marker ke Peta dengan Ikon Berwarna
+                let markerPuskesmas = L.marker([p.Latitude, p.Longitude], {
+                    icon: buatIconPuskesmas(warnaMarker)
+                }).addTo(markerPuskesmasLayer)
+                  .bindPopup(`<b>${namaPuskesmas}</b><br>Kemampuan: ${kemampuan}<br>Jarak: ${p.jarak.toFixed(2)} km<br><i>Klik untuk rute motor</i>`);
                 
                 markerPuskesmas.on('click', () => {
-                    buatRute(userLat, userLon, p.Latitude, p.Longitude);
+                    buatRuteRodaDua(userLat, userLon, p.Latitude, p.Longitude);
                 });
             });
         }
 
-        // 6. Fungsi Menggambar Rute Perjalanan (Routing)
-        function buatRute(startLat, startLon, endLat, endLon) {
+        // 6. Fungsi Rute Perjalanan Khusus Kendaraan Roda 2 (Motor)
+        function buatRuteRodaDua(startLat, startLon, endLat, endLon) {
             if (routingControl) {
-                map.removeControl(routingControl); // Hapus rute lama jika ada
+                map.removeControl(routingControl); 
             }
 
             routingControl = L.Routing.control({
@@ -248,12 +273,17 @@
                     L.latLng(startLat, startLon),
                     L.latLng(endLat, endLon)
                 ],
+                // Mengatur profil rute OSRM untuk kendaraan roda 2 (sepeda/motor)
+                router: L.Routing.osrmv1({
+                    serviceUrl: 'https://router.project-osrm.org/route/v1',
+                    profile: 'bike' // Menggunakan profil bike (motor/sepeda)
+                }),
                 routeWhileDragging: false,
                 language: 'id',
                 lineOptions: {
-                    styles: [{ color: '#007bff', opacity: 0.8, weight: 6 }]
+                    styles: [{ color: '#fd7e14', opacity: 0.8, weight: 6 }] // Garis rute warna oranye menyala
                 },
-                createMarker: function() { return null; } // Cegah marker duplikat dari plugin routing
+                createMarker: function() { return null; } 
             }).addTo(map);
         }
 
