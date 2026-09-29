@@ -237,7 +237,7 @@
                 let markerPuskesmas = L.marker([p.Latitude, p.Longitude], {
                     icon: buatIconPuskesmas(warnaMarker)
                 }).addTo(markerPuskesmasLayer)
-                  .bindPopup(`<b>${namaPuskesmas}</b><br>Kemampuan: ${kemampuan}<br>Jarak: ${p.jarak.toFixed(2)} km<br><b>Rute : Sepeda Motor</b>`);
+                  .bindPopup(`<b>${namaPuskesmas}</b><br>Kemampuan: ${kemampuan}<br> Alamat: {alamat}<br>Jarak: ${p.jarak.toFixed(2)} km`);
                 
                 markerPuskesmas.on('click', () => {
                     ambilRuteOSRM(userLat, userLon, p.Latitude, p.Longitude);
