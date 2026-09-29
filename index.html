@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pencari Rute Puskesmas Terdekat - Jawa Timur</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet Routing Machine CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
+        header { background: #2c3e50; color: white; padding: 10px 20px; text-align: center; }
+        #main-container { display: flex; flex: 1; height: calc(100vh - 50px); }
+        #sidebar { width: 350px; background: #f8f9fa; padding: 15px; overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.1); z-index: 1000; }
+        #map { flex: 1; height: 100%; }
+        .pkm-card { background: white; padding: 10px; margin-bottom: 10px; border-radius: 5px; border-left: 4px solid #3498db; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .pkm-card:hover { background: #f1f2f6; }
+        .info-box { background: #e8f4f8; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h2>Puskesmas Terdekat Jawa Timur (OSM)</h2>
+    </header>
+
+    <div id="main-container">
+        <div id="sidebar">
+            <div class="info-box" id="status-lokasi">Mendapatkan posisi Anda...</div>
+            <h3>Puskesmas Terdekat (Maks. 5)</h3>
+            <div id="list-puskesmas">Memuat data...</div>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet Routing Machine JS -->
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+
+    <script>
+        // Inisialisasi Peta (Center awal di Jawa Timur)
+        const map = L.map('map').setView([-7.5360639, 112.2384017], 8);
+
+        // Tambah Tile Layer OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        let userMarker;
+        let routingControl = null;
+        let allPuskesmasData = [];
+
+        // Marker User yang bisa digeser (Draggable)
+        function setupUserMarker(lat, lng, sourceText) {
+            if (userMarker) {
+                map.removeLayer(userMarker);
+            }
+
+            userMarker = L.marker([lat, lng], {
+                draggable: true,
+                title: "Lokasi Anda (Geser untuk ubah)"
+            }).addTo(map)
+              .bindPopup(`<b>Lokasi Anda (${sourceText})</b><br>Geser marker ini untuk mengubah posisi manual.`)
+              .openPopup();
+
+            map.setView([lat, lng], 13);
+            findNearestPuskesmas(lat, lng);
+
+            // Event saat marker digeser manual
+            userMarker.on('dragend', function (e) {
+                const pos = e.target.getLatLng();
+                document.getElementById('status-lokasi').innerHTML = `<b>Lokasi Manual:</b> Dipindahkan secara manual.`;
+                findNearestPuskesmas(pos.lat, pos.lng);
+            });
+        }
+
+        // Formula Haversine untuk menghitung jarak dalam kilometer
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radius bumi dalam km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Ambil data JSON Puskesmas
+        fetch('data_puskesmas_koordinat.json')
+            .then(response => response.json())
+            .then(data => {
+                allPuskesmasData = data;
+                initUserLocation();
+            })
+            .catch(error => {
+                console.error('Gagal memuat JSON:', error);
+                document.getElementById('status-lokasi').innerText = 'Gagal memuat data puskesmas.';
+            });
+
+        // Deteksi Lokasi (GPS -> Fallback IP Address)
+        function initUserLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        document.getElementById('status-lokasi').innerHTML = `<b>Lokasi GPS Aktif</b><br>Titik koordinat didapat dari perangkat.`;
+                        setupUserMarker(lat, lng, "GPS");
+                    },
+                    (error) => {
+                        console.warn("GPS gagal/ditolak, beralih ke IP Geolocation...");
+                        fetchIPLocation();
+                    },
+                    { timeout: 10000 }
+                );
+            } else {
+                fetchIPLocation();
+            }
+        }
+
+        // Fallback IP Address menggunakan ipapi.co
+        function fetchIPLocation() {
+            fetch('https://ipapi.co/json/')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.latitude && data.longitude) {
+                        document.getElementById('status-lokasi').innerHTML = `<b>Lokasi IP Address</b><br>GPS tidak tersedia. Perkiraan via IP (${data.city}).`;
+                        setupUserMarker(data.latitude, data.longitude, "IP Address");
+                    } else {
+                        throw new Error("Data IP tidak valid");
+                    }
+                })
+                .catch(err => {
+                    // Default fallback jika IP gagal (misal: Surabaya)
+                    document.getElementById('status-lokasi').innerHTML = `<b>Lokasi Default</b><br>Menggunakan pusat Jawa Timur (Surabaya).`;
+                    setupUserMarker(-7.2575, 112.7521, "Default");
+                });
+        }
+
+        // Mencari maksimal 5 puskesmas dalam radius 10 km
+        function searchPuskesmas(userLat, userLng) {
+            let results = [];
+
+            allPuskesmasData.forEach(pkm => {
+                // Pastikan properti latitude & longitude sesuai dengan JSON Anda
+                const pkmLat = parseFloat(pkm.Latitude || pkm.LATITUDE);
+                const pkmLng = parseFloat(pkm.Longitude || pkm.LONGITUDE);
+
+                if (!isNaN(pkmLat) && !isNaN(pkmLng)) {
+                    const dist = calculateDistance(userLat, userLng, pkmLat, pkmLng);
+                    if (dist <= 10) { // Radius maksimal 10 km
+                        results.push({ ...pkm, distance: dist, lat: pkmLat, lng: pkmLng });
+                    }
+                }
+            });
+
+            // Urutkan berdasarkan jarak terdekat
+            results.sort((a, b) => a.distance - b.distance);
+
+            // Ambil maksimal 5 buah
+            return results.slice(0, 5);
+        }
+
+        let pkmMarkers = [];
+
+        function findNearestPuskesmas(lat, lng) {
+            // Bersihkan marker puskesmas sebelumnya
+            pkmMarkers.forEach(m => map.removeLayer(m));
+            pkmMarkers = [];
+
+            const nearestList = searchPuskesmas(lat, lng);
+            const listContainer = document.getElementById('list-puskesmas');
+            listContainer.innerHTML = '';
+
+            if (nearestList.length === 0) {
+                listContainer.innerHTML = '<p>Tidak ada puskesmas dalam radius 10 km.</p>';
+                return;
+            }
+
+            nearestList.forEach((pkm, index) => {
+                // Buat Marker untuk Puskesmas
+                const marker = L.marker([pkm.lat, pkm.lng]).addTo(map)
+                    .bindPopup(`<b>${pkm["NAMA  PUSKESMAS"]}</b><br>${pkm.ALAMAT}<br>Jarak: ${pkm.distance.toFixed(2)} km`);
+                pkmMarkers.push(marker);
+
+                // Tambahkan ke Sidebar
+                const card = document.createElement('div');
+                card.className = 'pkm-card';
+                card.innerHTML = `
+                    <b>${index + 1}. ${pkm["NAMA  PUSKESMAS"]}</b><br>
+                    <small>${pkm.ALAMAT || '-'}</small><br>
+                    <b>Jarak: ${pkm.distance.toFixed(2)} km</b>
+                `;
+                
+                // Event klik kartu untuk menampilkan rute
+                card.onclick = () => {
+                    drawRoute(lat, lng, pkm.lat, pkm.lng);
+                    marker.openPopup();
+                };
+
+                listContainer.appendChild(card);
+            });
+        }
+
+        // Fungsi Menggambar Rute menggunakan Leaflet Routing Machine
+        function drawRoute(startLat, startLng, destLat, destLng) {
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+
+            routingControl = L.Routing.control({
+                waypoints: [
+                    L.latLng(startLat, startLng),
+                    L.latLng(destLat, destLng)
+                ],
+                routeWhileDragging: false,
+                language: 'id',
+                lineOptions: {
+                    styles: [{ color: '#e74c3c', weight: 5, opacity: 0.8 }]
+                }
+            }).addTo(map);
+        }
+    </script>
+</body>
+</html>
