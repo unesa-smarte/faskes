@@ -70,7 +70,7 @@
     <!-- Sidebar Kiri -->
     <div id="sidebar">
         <h2>🏥 Puskesmas Terdekat</h2>
-        <div class="info-sub">Maksimal 5 puskesmas (Radius 10 km). Klik kartu atau marker untuk menampilkan rute perjalanan motor.</div>
+        <div class="info-sub">Maksimal 5 puskesmas (Radius 10 km). Klik nama atau marker pada peta untuk menampilkan rute perjalanan motor.</div>
         <div id="daftar-puskesmas">
             <p style="color: #888; font-style: italic;">Sedang mendeteksi lokasi dan memuat data...</p>
         </div>
@@ -84,7 +84,7 @@
 
     <script>
         // 1. Inisialisasi Peta
-        var map = L.map('map').setView([-7.536064, 112.238402], 9);
+        var map = L.map('map').setView([-7.536064, 112.238402], 11);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
