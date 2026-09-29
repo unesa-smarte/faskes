@@ -7,8 +7,6 @@
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Leaflet Routing Machine CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
     
     <style>
         * { box-sizing: border-box; }
@@ -53,15 +51,13 @@
             font-size: 11px; 
             font-weight: bold; 
             color: white; 
-            background: #007bff; 
             border-radius: 4px; 
             margin-top: 6px; 
         }
-        .badge-rawat { background: #28a745; } /* Hijau untuk Rawat Inap */
-        .badge-non { background: #fd7e14; color: white; } /* Oranye untuk Non Rawat Inap */
+        .badge-rawat { background: #28a745; } 
+        .badge-non { background: #fd7e14; color: white; } 
         .jarak-teks { font-size: 12px; color: #6c757d; float: right; margin-top: 6px; font-weight: bold; }
         
-        /* Responsif untuk Layar HP */
         @media (max-width: 768px) {
             body { flex-direction: column; }
             #sidebar { width: 100%; height: 45vh; }
@@ -85,8 +81,6 @@
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Leaflet Routing Machine JS -->
-    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
 
     <script>
         // 1. Inisialisasi Peta
@@ -98,10 +92,10 @@
         }).addTo(map);
 
         let userMarker = null;
-        let routingControl = null;
+        let routeLayer = null; // Layer khusus untuk garis rute
         let markerPuskesmasLayer = L.layerGroup().addTo(map);
 
-        // Membuat Icon Pin Rumah Sakit Kustom (Warna Hijau / Oranye)
+        // Icon Pin Rumah Sakit Kustom
         function buatIconPuskesmas(warnaBg) {
             return L.divIcon({
                 className: 'custom-hospital-icon',
@@ -118,11 +112,7 @@
                         box-shadow: 0 3px 6px rgba(0,0,0,0.3);
                         border: 2px solid white;
                     ">
-                        <span style="
-                            transform: rotate(45deg); 
-                            font-size: 14px; 
-                            line-height: 1;
-                        ">🏥</span>
+                        <span style="transform: rotate(45deg); font-size: 14px; line-height: 1;">🏥</span>
                     </div>
                 `,
                 iconSize: [32, 32],
@@ -131,7 +121,7 @@
             });
         }
 
-        // 2. Rumus Haversine (Jarak KM)
+        // Rumus Haversine
         function hitungJarak(lat1, lon1, lat2, lon2) {
             function toRad(x) { return x * Math.PI / 180; }
             var R = 6371; 
@@ -143,7 +133,7 @@
             return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
         }
 
-        // 3. Deteksi Posisi Pengguna
+        // Deteksi Posisi Pengguna
         function inisialisasiPosisi() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
@@ -184,7 +174,7 @@
             prosesPuskesmasTerdekat(lat, lon);
         }
 
-        // 4. Proses JSON
+        // Proses JSON
         function prosesPuskesmasTerdekat(userLat, userLon) {
             fetch('data_puskesmas_koordinat.json')
                 .then(res => {
@@ -208,7 +198,7 @@
                 });
         }
 
-        // 5. Render Sidebar & Peta
+        // Render Sidebar & Peta
         function tampilkanKeSidebarDanPeta(userLat, userLon, listPuskesmas) {
             let containerSidebar = document.getElementById('daftar-puskesmas');
             containerSidebar.innerHTML = "";
@@ -226,9 +216,8 @@
                 
                 let isRawatInap = kemampuan.toLowerCase().includes("rawat inap");
                 let badgeClass = isRawatInap ? "badge-rawat" : "badge-non";
-                let warnaMarker = isRawatInap ? "#28a745" : "#fd7e14"; // Hijau / Oranye
+                let warnaMarker = isRawatInap ? "#28a745" : "#fd7e14"; 
 
-                // A. Kartu Sidebar
                 let itemDiv = document.createElement('div');
                 itemDiv.className = 'puskesmas-item';
                 itemDiv.style.borderLeftColor = warnaMarker; 
@@ -240,56 +229,61 @@
                 `;
                 
                 itemDiv.onclick = () => {
-                    buatRuteRodaDua(userLat, userLon, p.Latitude, p.Longitude);
+                    ambilRuteOSRM(userLat, userLon, p.Latitude, p.Longitude);
                 };
                 
                 containerSidebar.appendChild(itemDiv);
 
-                // B. Marker Peta dengan Icon Rumah Sakit
                 let markerPuskesmas = L.marker([p.Latitude, p.Longitude], {
                     icon: buatIconPuskesmas(warnaMarker)
                 }).addTo(markerPuskesmasLayer)
                   .bindPopup(`<b>${namaPuskesmas}</b><br>Kemampuan: ${kemampuan}<br>Jarak: ${p.jarak.toFixed(2)} km<br><b>Klik untuk melihat rute motor</b>`);
                 
                 markerPuskesmas.on('click', () => {
-                    buatRuteRodaDua(userLat, userLon, p.Latitude, p.Longitude);
+                    ambilRuteOSRM(userLat, userLon, p.Latitude, p.Longitude);
                 });
             });
         }
 
-        // 6. Fungsi Rute Kendaraan Roda 2 (Motor) dengan Router Handal
-        function buatRuteRodaDua(startLat, startLon, endLat, endLon) {
-            if (routingControl) {
-                map.removeControl(routingControl); 
+        // 7. Mengambil Rute langsung via OSRM API (Padanan OSMnx di Browser)
+        function ambilRuteOSRM(startLat, startLon, endLat, endLon) {
+            // Hapus rute sebelumnya jika ada
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
             }
 
-            routingControl = L.Routing.control({
-                waypoints: [
-                    L.latLng(startLat, startLon),
-                    L.latLng(endLat, endLon)
-                ],
-                // Menggunakan service router OSRM publik dengan profil bike (motor)
-                router: new L.Routing.osrmv1({
-                    serviceUrl: 'https://router.project-osrm.org/route/v1',
-                    profile: 'bike'
-                }),
-                routeWhileDragging: false,
-                language: 'id',
-                lineOptions: {
-                    styles: [{ color: '#007bff', opacity: 0.85, weight: 6 }]
-                },
-                show: true,
-                createMarker: function() { return null; } // Sembunyikan marker bawaan routing agar tidak numpuk
-            }).addTo(map);
+            // Endpoint OSRM publik untuk kendaraan roda dua (bike / cycling)
+            let url = `https://router.project-osrm.org/route/v1/bike/${startLon},${startLat};${endLon},${endLat}?overview=full&geometries=geojson`;
 
-            // Tangkap error jika server OSRM gagal merespons jaringan/koneksi
-            routingControl.on('routingerror', function(e) {
-                console.warn("Gagal memuat rute otomatis:", e.error);
-                alert("Gagal memuat rute perjalanan. Pastikan perangkat terhubung ke internet.");
-            });
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                        let routeCoords = data.routes[0].geometry.coordinates;
+                        
+                        // Konversi koordinat [Lon, Lat] dari OSRM ke format Leaflet [Lat, Lon]
+                        let latLngs = routeCoords.map(coord => [coord[1], coord[0]]);
+
+                        // Gambar garis rute di peta
+                        routeLayer = L.polyline(latLngs, {
+                            color: '#007bff',
+                            weight: 6,
+                            opacity: 0.85
+                        }).addTo(map);
+
+                        // Sesuaikan zoom peta agar mencakup seluruh rute
+                        map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+                    } else {
+                        alert("Rute tidak ditemukan oleh server.");
+                    }
+                })
+                .catch(error => {
+                    console.error("Gagal mengambil rute:", error);
+                    alert("Terjadi kesalahan saat memuat rute perjalanan.");
+                });
         }
 
-        // Jalankan aplikasi saat dimuat
+        // Jalankan aplikasi
         inisialisasiPosisi();
     </script>
 </body>
