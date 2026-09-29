@@ -16,10 +16,7 @@
             font-family: Arial, sans-serif; 
             height: 100vh; 
             overflow: hidden; 
-            position: relative;
         }
-        
-        /* Styling Sidebar dengan Transisi Halus */
         #sidebar { 
             width: 380px; 
             background: #f8f9fa; 
@@ -27,45 +24,11 @@
             box-shadow: 2px 0 5px rgba(0,0,0,0.1); 
             overflow-y: auto; 
             z-index: 1000; 
-            transition: transform 0.3s ease-in-out;
-            position: relative;
         }
-        
-        /* Kelas saat sidebar tertutup */
-        #sidebar.closed {
-            transform: translateX(-100%);
-            padding: 0;
-            width: 0;
-        }
-
         #map { 
             flex-grow: 1; 
             height: 100%; 
         }
-
-        /* Tombol Buka/Tutup Sidebar */
-        #toggle-btn {
-            position: absolute;
-            top: 20px;
-            right: -45px;
-            background: white;
-            border: none;
-            width: 40px;
-            height: 40px;
-            border-radius: 0 6px 6px 0;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
-            cursor: pointer;
-            font-size: 18px;
-            z-index: 1100;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.2s;
-        }
-        #toggle-btn:hover {
-            background: #e9ecef;
-        }
-
         h2 { margin-top: 0; color: #333; font-size: 20px; }
         .info-sub { font-size: 13px; color: #666; margin-bottom: 15px; }
         .puskesmas-item { 
@@ -98,13 +61,7 @@
         @media (max-width: 768px) {
             body { flex-direction: column; }
             #sidebar { width: 100%; height: 45vh; }
-            #sidebar.closed { height: 0; width: 100%; transform: none; }
-            #toggle-btn {
-                top: auto;
-                bottom: -40px;
-                right: 20px;
-                border-radius: 0 0 6px 6px;
-            }
+            #map { height: 55vh; }
         }
     </style>
 </head>
@@ -112,11 +69,8 @@
 
     <!-- Sidebar Kiri -->
     <div id="sidebar">
-        <!-- Tombol Buka/Tutup Sidebar -->
-        <button id="toggle-btn" onclick="toggleSidebar()" title="Buka/Tutup Panel">◀</button>
-        
         <h2>🏥 Puskesmas Terdekat</h2>
-        <div class="info-sub">Maksimal 5 puskesmas (Radius 10 km). Klik kartu atau marker untuk menampilkan rute perjalanan.</div>
+        <div class="info-sub">Maksimal 5 puskesmas (Radius 10 km). Klik nama atau marker pada peta untuk menampilkan rute perjalanan.</div>
         <div id="daftar-puskesmas">
             <p style="color: #888; font-style: italic;">Sedang mendeteksi lokasi dan memuat data...</p>
         </div>
@@ -129,28 +83,8 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // Fungsi untuk Mengontrol Buka/Tutup Sidebar
-        function toggleSidebar() {
-            let sidebar = document.getElementById('sidebar');
-            let btn = document.getElementById('toggle-btn');
-            
-            sidebar.classList.toggle('closed');
-            
-            // Ubah arah panah tombol tergantung kondisi
-            if (sidebar.classList.contains('closed')) {
-                btn.innerHTML = '▶';
-            } else {
-                btn.innerHTML = '◀';
-            }
-            
-            // Perbarui ukuran peta agar pas setelah sidebar ditutup/dibuka
-            setTimeout(function() {
-                map.invalidateSize();
-            }, 300);
-        }
-
         // 1. Inisialisasi Peta
-        var map = L.map('map').setView([-7.536064, 112.238402], 9);
+        var map = L.map('map').setView([-7.536064, 112.238402], 11);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
@@ -158,9 +92,10 @@
         }).addTo(map);
 
         let userMarker = null;
-        let routeLayer = null; 
+        let routeLayer = null; // Layer khusus untuk garis rute
         let markerPuskesmasLayer = L.layerGroup().addTo(map);
 
+        // Icon Pin Rumah Sakit Kustom
         function buatIconPuskesmas(warnaBg) {
             return L.divIcon({
                 className: 'custom-hospital-icon',
@@ -186,6 +121,7 @@
             });
         }
 
+        // Rumus Haversine
         function hitungJarak(lat1, lon1, lat2, lon2) {
             function toRad(x) { return x * Math.PI / 180; }
             var R = 6371; 
@@ -197,6 +133,7 @@
             return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
         }
 
+        // Deteksi Posisi Pengguna
         function inisialisasiPosisi() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
@@ -226,7 +163,7 @@
             map.setView([lat, lon], 13);
             
             userMarker = L.marker([lat, lon], { draggable: true }).addTo(map)
-                .bindPopup(`<b>${title}</b><br>💡 <i>Geser pin ini jika ingin mengubah posisi awal.</i>`)
+                .bindPopup(`<b>${title}</b><br>💡 <i>Geser pin ini jika ingin mengubah posisi anda.</i>`)
                 .openPopup();
 
             userMarker.on('dragend', function (e) {
@@ -237,6 +174,7 @@
             prosesPuskesmasTerdekat(lat, lon);
         }
 
+        // Proses JSON
         function prosesPuskesmasTerdekat(userLat, userLon) {
             fetch('data_puskesmas_koordinat.json')
                 .then(res => {
@@ -260,6 +198,7 @@
                 });
         }
 
+        // Render Sidebar & Peta
         function tampilkanKeSidebarDanPeta(userLat, userLon, listPuskesmas) {
             let containerSidebar = document.getElementById('daftar-puskesmas');
             containerSidebar.innerHTML = "";
@@ -298,7 +237,7 @@
                 let markerPuskesmas = L.marker([p.Latitude, p.Longitude], {
                     icon: buatIconPuskesmas(warnaMarker)
                 }).addTo(markerPuskesmasLayer)
-                  .bindPopup(`<b>${namaPuskesmas}</b><br>Kemampuan: ${kemampuan}<br>Alamat: ${alamat}<br>Jarak: ${p.jarak.toFixed(2)} km`);
+                  .bindPopup(`<b>${namaPuskesmas}</b><br> Alamat: ${alamat}<br>Jarak: ${p.jarak.toFixed(2)} km<br>Kemampuan: ${kemampuan}`);
                 
                 markerPuskesmas.on('click', () => {
                     ambilRuteOSRM(userLat, userLon, p.Latitude, p.Longitude);
@@ -306,11 +245,14 @@
             });
         }
 
+        // 7. Mengambil Rute langsung via OSRM API (Padanan OSMnx di Browser)
         function ambilRuteOSRM(startLat, startLon, endLat, endLon) {
+            // Hapus rute sebelumnya jika ada
             if (routeLayer) {
                 map.removeLayer(routeLayer);
             }
 
+            // Endpoint OSRM publik untuk kendaraan roda dua (bike / cycling)
             let url = `https://router.project-osrm.org/route/v1/bike/${startLon},${startLat};${endLon},${endLat}?overview=full&geometries=geojson`;
 
             fetch(url)
@@ -318,14 +260,18 @@
                 .then(data => {
                     if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
                         let routeCoords = data.routes[0].geometry.coordinates;
+                        
+                        // Konversi koordinat [Lon, Lat] dari OSRM ke format Leaflet [Lat, Lon]
                         let latLngs = routeCoords.map(coord => [coord[1], coord[0]]);
 
+                        // Gambar garis rute di peta
                         routeLayer = L.polyline(latLngs, {
                             color: '#007bff',
                             weight: 6,
                             opacity: 0.85
                         }).addTo(map);
 
+                        // Sesuaikan zoom peta agar mencakup seluruh rute
                         map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
                     } else {
                         alert("Rute tidak ditemukan oleh server.");
@@ -337,6 +283,7 @@
                 });
         }
 
+        // Jalankan aplikasi
         inisialisasiPosisi();
     </script>
 </body>
